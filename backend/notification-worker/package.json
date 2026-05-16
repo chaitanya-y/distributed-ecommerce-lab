@@ -1,0 +1,22 @@
+{
+  "name": "notification-worker",
+  "version": "1.0.0",
+  "description": "The Notification Worker handles async notifications.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+  "dev": "nodemon src/worker.js",
+  "start": "node src/worker.js",
+  "test": "echo \"No tests yet\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^2.0.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
