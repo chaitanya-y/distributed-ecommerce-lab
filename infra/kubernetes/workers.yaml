@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-worker
+  namespace: orderflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-worker
+  template:
+    metadata:
+      labels:
+        app: notification-worker
+    spec:
+      containers:
+        - name: notification-worker
+          image: orderflow-notification-worker:local
+          imagePullPolicy: Never
+          env:
+            - name: RABBITMQ_URL
+              value: amqp://host.docker.internal:5672
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  namespace: orderflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: orderflow-scheduler:local
+          imagePullPolicy: Never
+          env:
+            - name: DATABASE_URL
+              value: postgres://orderflow_user:orderflow_password@host.docker.internal:5432/orderflow_orders
+            - name: RABBITMQ_URL
+              value: amqp://host.docker.internal:5672

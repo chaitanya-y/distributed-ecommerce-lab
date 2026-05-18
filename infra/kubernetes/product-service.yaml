@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: orderflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+        - name: product-service
+          image: orderflow-product-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4001
+          env:
+            - name: PORT
+              value: "4001"
+            - name: MONGODB_URI
+              value: mongodb://host.docker.internal:27017/orderflow_products
+            - name: REDIS_URL
+              value: redis://host.docker.internal:6379
+            - name: ELASTICSEARCH_URL
+              value: http://host.docker.internal:9200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: orderflow
+spec:
+  type: ClusterIP
+  selector:
+    app: product-service
+  ports:
+    - name: http
+      port: 4001
+      targetPort: 4001

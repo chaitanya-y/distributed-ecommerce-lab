@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-  "dev": "nodemon src/scheduler.js",
-  "start": "node src/scheduler.js",
-  "test": "echo \"No tests yet\""
+    "dev": "nodemon src/scheduler.js",
+    "start": "node src/scheduler.js",
+    "test": "echo \"No tests yet\""
   },
   "keywords": [],
   "author": "",
