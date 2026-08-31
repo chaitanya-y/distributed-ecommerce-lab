@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
   createProduct,
+  updateProduct,
+  verifyProducts,
   listProducts,
   uploadProductImageForProduct,
   searchProductCatalog,
@@ -13,6 +15,8 @@ const router = Router();
 
 router.post("/", createProduct);
 router.get("/", listProducts);
+router.post("/verify", verifyProducts);
+router.patch("/:productId", updateProduct);
 router.post(
   "/:productId/image",
   uploadProductImage.single("image"),

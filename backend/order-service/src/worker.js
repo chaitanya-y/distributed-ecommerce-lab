@@ -1,9 +1,11 @@
 import "dotenv/config";
 import amqp from "amqplib";
 import { pool, connectPostgres } from "./config/db.js";
+import { finalizeInventorySale } from "./services/inventoryService.js";
 
 const EXCHANGE_NAME = "order_events";
 const QUEUE_NAME = "order_processor_order_created";
+const INVENTORY_QUEUE_NAME = "inventory_product_upserted";
 const ENABLE_WORKER_DELAY = true;
 const WORKER_DELAY_MS = 5000;
 
@@ -27,58 +29,6 @@ async function publishEvent(channel, routingKey, eventType, data) {
     }
   );
 }
-
-async function reserveInventory(client, items) {
-  for (const item of items) {
-    const inventoryResult = await client.query(
-      `
-      SELECT *
-      FROM inventory
-      WHERE product_id = $1
-      FOR UPDATE
-      `,
-      [item.product_id]
-    );
-
-    if (inventoryResult.rows.length === 0) {
-      throw new Error(`Inventory not found for product ${item.product_id}`);
-    }
-
-    const inventory = inventoryResult.rows[0];
-    const availableStock = inventory.stock - inventory.reserved;
-
-    if (availableStock < item.quantity) {
-      throw new Error(`Not enough stock for product ${item.product_id}`);
-    }
-
-    await client.query(
-      `
-      UPDATE inventory
-      SET reserved = reserved + $1,
-          updated_at = NOW()
-      WHERE product_id = $2
-      `,
-      [item.quantity, item.product_id]
-    );
-  }
-}
-
-
-async function finalizeInventorySale(client, items) {
-  for (const item of items) {
-    await client.query(
-      `
-      UPDATE inventory
-      SET stock = stock - $1,
-          reserved = reserved - $1,
-          updated_at = NOW()
-      WHERE product_id = $2
-      `,
-      [item.quantity, item.product_id]
-    );
-  }
-}
-
 
 async function processPaymentIdempotently(client, order) {
   const idempotencyKey = `payment:${order.id}`;
@@ -147,7 +97,6 @@ async function processOrder(event, channel) {
       return;
     }
 
-    await reserveInventory(client, items);
     const paymentAttempt = await processPaymentIdempotently(client, currentOrder);
     await finalizeInventorySale(client, items);
 
@@ -197,6 +146,44 @@ async function processOrder(event, channel) {
   }
 }
 
+async function applyProductUpsert(event) {
+  const product = event.data.product;
+  const hasStock = Number.isInteger(product.stock);
+
+  if (!hasStock) {
+    await pool.query(
+      `
+        UPDATE inventory
+        SET product_name = $2,
+            unit_price = $3,
+            product_updated_at = $4,
+            updated_at = NOW()
+        WHERE product_id = $1
+          AND (product_updated_at IS NULL OR product_updated_at <= $4)
+      `,
+      [product.id, product.name, product.price, product.updatedAt]
+    );
+    return;
+  }
+
+  await pool.query(
+    `
+      INSERT INTO inventory (product_id, product_name, unit_price, stock, product_updated_at)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (product_id) DO UPDATE
+      SET product_name = EXCLUDED.product_name,
+          unit_price = EXCLUDED.unit_price,
+          stock = EXCLUDED.stock,
+          product_updated_at = EXCLUDED.product_updated_at,
+          updated_at = NOW()
+      WHERE (inventory.product_updated_at IS NULL
+             OR inventory.product_updated_at <= EXCLUDED.product_updated_at)
+        AND EXCLUDED.stock >= inventory.reserved
+    `,
+    [product.id, product.name, product.price, product.stock, product.updatedAt]
+  );
+}
+
 async function startWorker() {
   await connectPostgres();
 
@@ -212,6 +199,10 @@ async function startWorker() {
   });
 
   await channel.bindQueue(QUEUE_NAME, EXCHANGE_NAME, "order.created");
+
+  await channel.assertExchange("product_events", "topic", { durable: true });
+  await channel.assertQueue(INVENTORY_QUEUE_NAME, { durable: true });
+  await channel.bindQueue(INVENTORY_QUEUE_NAME, "product_events", "product.upserted");
 
   channel.prefetch(1);
 
@@ -231,6 +222,18 @@ async function startWorker() {
     } catch (error) {
       console.error("Unexpected worker failure", error);
       channel.nack(message, false, false);
+    }
+  });
+
+  channel.consume(INVENTORY_QUEUE_NAME, async (message) => {
+    if (!message) return;
+    try {
+      const event = JSON.parse(message.content.toString());
+      await applyProductUpsert(event);
+      channel.ack(message);
+    } catch (error) {
+      console.error("Inventory projection update failed", error);
+      channel.nack(message, false, true);
     }
   });
 }

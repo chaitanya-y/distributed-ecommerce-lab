@@ -1,7 +1,12 @@
 import { Product } from "../models/Product.js";
-import { createProductSchema } from "../validators/productValidator.js";
+import {
+  createProductSchema,
+  updateProductSchema,
+  verifyProductsSchema,
+} from "../validators/productValidator.js";
 import { redisClient } from "../config/redis.js";
 import { indexProduct, searchProducts, } from "../services/productSearchService.js";
+import { publishProductUpserted } from "../config/rabbitmq.js";
 
 
 
@@ -15,9 +20,69 @@ export async function createProduct(req, res, next) {
     const product = await Product.create(validatedBody);
     await indexProduct(product);
     await redisClient.del(PRODUCT_LIST_CACHE_KEY);
+    publishProductUpserted(product);
     res.status(201).json({
       message: "Product created",
       product,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateProduct(req, res, next) {
+  try {
+    const validatedBody = updateProductSchema.parse(req.body);
+    const product = await Product.findByIdAndUpdate(
+      req.params.productId,
+      validatedBody,
+      { new: true, runValidators: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    await indexProduct(product);
+    await redisClient.del(PRODUCT_LIST_CACHE_KEY);
+    publishProductUpserted(product, {
+      stockChanged: Object.hasOwn(validatedBody, "stock"),
+    });
+
+    return res.json({ message: "Product updated", product });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Internal catalog contract used by Order Service. Prices and names from a cart
+// are deliberately not accepted as the authoritative values.
+export async function verifyProducts(req, res, next) {
+  try {
+    const { productIds } = verifyProductsSchema.parse(req.body);
+    const uniqueIds = [...new Set(productIds)];
+    const products = await Product.find({ _id: { $in: uniqueIds } });
+    const byId = new Map(products.map((product) => [product._id.toString(), product]));
+    const missingProductIds = uniqueIds.filter((id) => !byId.has(id));
+
+    if (missingProductIds.length > 0) {
+      return res.status(404).json({
+        message: "One or more products no longer exist",
+        missingProductIds,
+      });
+    }
+
+    return res.json({
+      products: uniqueIds.map((id) => {
+        const product = byId.get(id);
+        return {
+          id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          updatedAt: product.updatedAt,
+        };
+      }),
     });
   } catch (error) {
     next(error);
@@ -78,6 +143,7 @@ export async function uploadProductImageForProduct(req, res, next) {
 
     await indexProduct(product);
     await redisClient.del(PRODUCT_LIST_CACHE_KEY);  
+    publishProductUpserted(product, { stockChanged: false });
 
     return res.status(200).json({
       message: "Product image uploaded",

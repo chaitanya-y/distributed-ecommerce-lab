@@ -12,6 +12,7 @@ export async function indexProduct(product) {
       description: product.description,
       category: product.category,
       price: product.price,
+      stock: product.stock,
       imageUrl: product.imageUrl,
     },
   });

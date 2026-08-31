@@ -111,6 +111,16 @@ grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
+.stock-label {
+  color: #067647;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stock-label.out-of-stock {
+  color: #b42318;
+}
+
 .error-message {
   color: #b42318;
 }

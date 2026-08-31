@@ -3,6 +3,7 @@ import app from "./app.js";
 import { connectMongoDB } from "./config/mongodb.js";
 import { connectRedis } from "./config/redis.js";
 import { connectElasticsearch } from "./config/elasticsearch.js";
+import { connectRabbitMQ } from "./config/rabbitmq.js";
 const PORT = process.env.PORT || 4001;
 
 async function startServer() {
@@ -10,6 +11,7 @@ async function startServer() {
     await connectMongoDB();
     await connectRedis();
     await connectElasticsearch();
+    await connectRabbitMQ();
     app.listen(PORT, () => {
       console.log(`Product service running on port ${PORT}`);
     });

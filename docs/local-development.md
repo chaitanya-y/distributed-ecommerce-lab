@@ -26,6 +26,11 @@ http://localhost:4002
 cd backend/order-service
 npm run worker:dev
 
+# The order service verifies products directly through this URL. This is the
+# default for local development, so it only needs setting when services are
+# deployed separately.
+export PRODUCT_SERVICE_URL=http://localhost:4001
+
 cd backend/notification-worker
 npm run dev
 
@@ -65,9 +70,7 @@ curl -X POST http://localhost:8080/api/orders/ \
     "items": [
       {
         "productId": "PRODUCT_ID_HERE",
-        "productName": "Mechanical Keyboard",
-        "quantity": 1,
-        "unitPrice": 89.99
+        "quantity": 1
       }
     ]
   }'

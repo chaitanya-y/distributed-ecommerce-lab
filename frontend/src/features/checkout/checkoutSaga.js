@@ -12,9 +12,7 @@ function buildOrderPayload(cartItems) {
     customerEmail: "test@example.com",
     items: cartItems.map((item) => ({
       productId: item.productId,
-      productName: item.productName,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
     })),
   };
 }
