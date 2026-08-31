@@ -9,3 +9,14 @@ export const createProductSchema = z.object({
   imageUrl: z.string().url("Image URL must be valid").nullable().optional(),
   attributes: z.record(z.string()).optional(),
 });
+
+export const updateProductSchema = createProductSchema.partial().refine(
+  (product) => Object.keys(product).length > 0,
+  "At least one product field is required"
+);
+
+export const verifyProductsSchema = z.object({
+  productIds: z.array(z.string().regex(/^[a-f\d]{24}$/i, "Invalid product ID"))
+    .min(1)
+    .max(100),
+});

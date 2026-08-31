@@ -11,6 +11,10 @@ export function errorHandler(error, req, res, next) {
     });
   }
 
+  if (error.status) {
+    return res.status(error.status).json({ message: error.message });
+  }
+
   console.error(error);
 
   return res.status(500).json({

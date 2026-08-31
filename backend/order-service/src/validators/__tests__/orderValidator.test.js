@@ -16,6 +16,22 @@ describe("createOrderSchema", () => {
     });
 
     expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toEqual({ productId: "product-1", quantity: 2 });
+  });
+
+  it("does not retain client-supplied catalog fields", () => {
+    const result = createOrderSchema.parse({
+      customerEmail: "test@example.com",
+      items: [{
+        productId: "product-1",
+        quantity: 1,
+        productName: "Forged name",
+        unitPrice: 0.01,
+      }],
+    });
+
+    expect(result.items[0]).not.toHaveProperty("productName");
+    expect(result.items[0]).not.toHaveProperty("unitPrice");
   });
 
   it("rejects an empty cart", () => {

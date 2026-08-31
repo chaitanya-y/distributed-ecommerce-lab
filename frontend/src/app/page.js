@@ -46,8 +46,11 @@ function ProductCard({ product }) {
         <p className="description">{product.description}</p>
         <div className="product-footer">
           <strong>${Number(product.price).toFixed(2)}</strong>
-          <button type="button" onClick={handleAddToCart}>
-            Add
+          <span className={`stock-label ${product.stock === 0 ? "out-of-stock" : ""}`}>
+            {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+          </span>
+          <button type="button" onClick={handleAddToCart} disabled={product.stock === 0}>
+            {product.stock > 0 ? "Add" : "Unavailable"}
           </button>
         </div>
       </div>

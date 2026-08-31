@@ -1,6 +1,8 @@
 import { pool } from "../config/db.js";
 import { createOrderSchema } from "../validators/orderValidator.js";
 import { publishOrderCreated } from "../events/orderEvents.js";
+import { verifyCatalogProducts } from "../services/catalogClient.js";
+import { reserveInventory } from "../services/inventoryService.js";
 
 export async function createOrder(req, res, next) {
   const client = await pool.connect();
@@ -49,9 +51,30 @@ export async function createOrder(req, res, next) {
     }
 
 
-    const totalAmount = validatedBody.items.reduce((sum, item) => {
+    const catalogProducts = await verifyCatalogProducts(
+      validatedBody.items.map((item) => item.productId)
+    );
+    const productsById = new Map(catalogProducts.map((product) => [product.id, product]));
+    const verifiedItems = validatedBody.items.map((item) => {
+      const product = productsById.get(item.productId);
+      if (!product) {
+        throw new Error(`Catalog did not return product ${item.productId}`);
+      }
+      return {
+        productId: product.id,
+        productName: product.name,
+        quantity: item.quantity,
+        unitPrice: product.price,
+      };
+    });
+
+    const totalAmount = verifiedItems.reduce((sum, item) => {
       return sum + item.quantity * item.unitPrice;
     }, 0);
+
+    // Reserve before persisting the order so an accepted order has already
+    // claimed stock. A transaction rollback releases every reservation.
+    await reserveInventory(client, verifiedItems);
 
     const orderResult = await client.query(
       `
@@ -66,7 +89,7 @@ export async function createOrder(req, res, next) {
 
     const orderItems = [];
 
-    for (const item of validatedBody.items) {
+    for (const item of verifiedItems) {
       const itemResult = await client.query(
         `
         INSERT INTO order_items (
